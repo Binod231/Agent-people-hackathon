@@ -1,0 +1,462 @@
+/* ============================================================================
+   ui/styles.css -- Chat_UI presentation. No build step, no preprocessor,
+   no CDN. Loaded by index.html as a plain stylesheet and served from the
+   Lambda deployment package.
+
+   Layout contract (Requirement 7 AC3):
+     body is a three-row grid -- masthead / scrolling chat / sticky composer --
+     exactly one viewport tall via 100dvh. One breakpoint, at 40rem. Content
+     measures at most 48rem and is centred, so 1280 px reads as a column rather
+     than a stretched line. The composer is sticky and pads itself out of the
+     way of env(safe-area-inset-bottom), so it stays reachable at 390 px.
+
+   Focus contract (Requirement 7 AC4):
+     `outline: none` appears nowhere in this file. :focus-visible gets a
+     thicker, offset outline on top of the browser default, and the skip link
+     reveals itself on :focus as well as :focus-visible so it is never a
+     silent tab stop.
+   ========================================================================= */
+
+/* --------------------------------------------------------------- tokens -- */
+
+:root {
+  color-scheme: light dark;
+
+  --bg:        #fbfaf8;
+  --surface:   #ffffff;
+  --surface-2: #f2efe9;
+  --line:      #d8d3ca;
+  --text:      #1b1b1f;
+  --muted:     #595650;
+  --accent:    #1d4ed8;
+  --accent-fg: #ffffff;
+  --focus:     #1d4ed8;
+  --user-bg:   #e9eefc;
+  --user-line: #c3d0f5;
+  --err-line:  #a4301a;
+  --err-bg:    #fdf0ec;
+  --note-line: #7a5d00;
+  --note-bg:   #fdf7e3;
+
+  --radius: 0.625rem;
+  --gap:    0.75rem;
+  --pad:    1rem;
+  --shell:  48rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:        #14151a;
+    --surface:   #1c1e25;
+    --surface-2: #23262f;
+    --line:      #3a3e49;
+    --text:      #ecebe8;
+    --muted:     #a8a49c;
+    --accent:    #9ec1ff;
+    --accent-fg: #0f1117;
+    --focus:     #9ec1ff;
+    --user-bg:   #232a38;
+    --user-line: #35405a;
+    --err-line:  #ff9b86;
+    --err-bg:    #2a1d1a;
+    --note-line: #e3c766;
+    --note-bg:   #272218;
+  }
+}
+
+/* ----------------------------------------------------------------- base -- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Author rules can otherwise beat the UA rule for [hidden]; app.js toggles
+   this attribute on #ingested and #source-link. */
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-height: 100vh;             /* fallback: the page grows, composer sticks */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+}
+
+/* The fixed shell: the page itself does not scroll, the transcript does. */
+@supports (height: 100dvh) {
+  body { min-height: 0; height: 100dvh; }
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+a { color: var(--accent); }
+a:hover { text-decoration-thickness: 2px; }
+
+/* ------------------------------------------------------------ skip link -- */
+
+.skip {
+  position: absolute;
+  z-index: 5;
+  inset-inline-start: 0.75rem;
+  inset-block-start: 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(calc(-100% - 1.5rem));
+  transition: transform 120ms ease-out;
+}
+
+.skip:focus,
+.skip:focus-visible { transform: translateY(0); }
+
+/* ------------------------------------------------------------- masthead -- */
+
+/* Every section centres its own content: the surfaces span the full width,
+   the measure never exceeds --shell. Child rules below only ever touch
+   margin-block, so the inline auto margins that do the centring survive. */
+
+.masthead {
+  padding: 0.85rem var(--pad);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.masthead > * {
+  width: 100%;
+  max-width: var(--shell);
+  margin-inline: auto;
+}
+
+.masthead h1 {
+  margin-block: 0;
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+}
+
+#tagline {
+  margin-block: 0.15rem 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* ------------------------------------------------- chat, the scroll area -- */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
+  padding: var(--gap) var(--pad);
+}
+
+.chat > * {
+  flex: none;                    /* a scrolling list, so nothing compresses */
+  width: 100%;
+  min-width: 0;
+  max-width: var(--shell);
+  margin-inline: auto;
+}
+
+/* ---------------------------------------------- transcript and messages -- */
+
+.transcript {
+  margin-block: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transcript:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+/* A column with a gap rather than sibling margins, so the paragraph and <pre>
+   children app.js appends space themselves without a specificity contest. */
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-block: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-wrap: break-word;
+}
+
+.msg + .msg { margin-top: var(--gap); }
+
+.msg > * {
+  margin: 0;
+  min-width: 0;                  /* lets a wide <pre> scroll, not overflow */
+}
+
+.msg__who {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.msg pre {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--surface-2);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+  font: 0.8125rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.msg code {
+  padding: 0.05em 0.3em;
+  border-radius: 0.25rem;
+  background: var(--surface-2);
+  font: 0.875em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.msg pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: 1em;
+}
+
+.msg--user {
+  border-color: var(--user-line);
+  background: var(--user-bg);
+}
+
+/* Errors and notices are flagged by an inline-start rule and by the wording
+   of msg__who, never by colour alone (Requirement 6 AC1). */
+.msg--error {
+  border-color: var(--err-line);
+  border-inline-start-width: 4px;
+  background: var(--err-bg);
+}
+
+.msg--notice {
+  border-color: var(--note-line);
+  border-inline-start-width: 4px;
+  background: var(--note-bg);
+}
+
+/* --------------------------------------- status line and step checklist -- */
+
+.status {
+  margin-block: 0;
+  min-height: 1.25rem;           /* reserved, so filling it reflows nothing */
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.status--busy::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+
+.steps {
+  display: grid;
+  gap: 0.1rem;
+  margin-block: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.steps:empty { display: none; }
+
+.step {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.step::before {
+  content: "\2713";              /* decorative; the words carry the state */
+  inline-size: 0.9rem;
+  flex: none;
+}
+
+.step--error::before { content: "\2717"; color: var(--err-line); }
+.step--skipped::before { content: "\2013"; }
+
+.step__ms {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------- ingested disclosure -- */
+
+.chat-footer {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.ingested {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ingested summary {
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ingested__list {
+  margin: 0.45rem 0 0;
+  padding-inline-start: 1.15rem;
+  font: 0.8125rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ------------------------------------------------------------- composer -- */
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: var(--gap) var(--pad)
+           calc(var(--gap) + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.composer > * {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--shell);
+  margin-inline: auto;
+}
+
+.composer__label {
+  display: block;
+  margin-block: 0 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.composer__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.composer__input {
+  width: 100%;
+  min-height: 2.75rem;
+  max-height: 9rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;                 /* 1rem, so iOS does not zoom on focus */
+  line-height: 1.45;
+  resize: vertical;
+  field-sizing: content;
+}
+
+.composer__input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.composer__send {
+  min-height: 2.75rem;           /* 44 px tap target at 390 px */
+  padding: 0.6rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.composer__send:hover { filter: brightness(0.94); }
+
+.composer__send:disabled,
+.composer__send[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.hint {
+  margin-block: 0.35rem 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* ------------------------------------------- the one breakpoint, 40rem -- */
+
+@media (min-width: 40rem) {
+  :root {
+    --gap: 1rem;
+    --pad: 1.5rem;
+  }
+
+  .masthead { padding: 1.1rem var(--pad); }
+  .masthead h1 { font-size: 1.375rem; }
+
+  .chat { padding: 1.25rem var(--pad); }
+
+  .msg { padding: 0.75rem 1rem; }
+  .msg--user { margin-inline-start: 3rem; }
+
+  .composer__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}
+
+/* ----------------------------------------------- user preference guards -- */
+
+@media (prefers-reduced-motion: reduce) {
+  .chat { scroll-behavior: auto; }
+  .skip { transition: none; }
+  .status--busy::before { animation: none; }
+}
+
+/* Keep every edge and the focus ring when the OS forces its own palette. */
+@media (forced-colors: active) {
+  .msg,
+  .ingested,
+  .composer__input,
+  .composer__send { border: 1px solid; }
+
+  :focus-visible,
+  .transcript:focus-visible { outline: 3px solid; }
+}

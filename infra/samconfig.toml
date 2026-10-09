@@ -1,0 +1,50 @@
+# SAM CLI defaults for the one stack. scripts/deploy.sh passes this file with
+# --config-file, so the values below are what a deploy actually uses; running
+# `sam build` or `sam deploy` by hand without the flag will not see them.
+#
+#   scripts/deploy.sh    <- the supported path: gate, then build, then deploy
+#
+# By hand, from the repository root, with an absolute config path -- `sam build`
+# resolves a relative --config-file against the template's directory and then
+# reports the file as missing, while `sam validate` resolves it against the
+# working directory:
+#
+#   sam validate --config-file "$PWD/infra/samconfig.toml"
+#   sam build --template-file "$PWD/infra/template.yaml" \
+#             --config-file   "$PWD/infra/samconfig.toml"
+#
+# The paths *inside* this file are relative to the working directory, not to
+# this file, so run SAM from the repository root either way.
+
+version = 0.1
+
+[default.global.parameters]
+stack_name = "codebase-welcome-guide"
+
+[default.validate.parameters]
+template_file = "infra/template.yaml"
+lint = true
+
+[default.build.parameters]
+template_file = "infra/template.yaml"
+# Skips SAM's copy of the CodeUri tree into a scratch directory and runs the
+# Makefile in place. The copy is correct either way -- make resolves its paths
+# from the working directory, which is the repository root in both cases -- but
+# the tree includes .venv, so copying it is 76 MB of pointless I/O per build.
+build_in_source = true
+
+[default.deploy.parameters]
+region = "us-east-1" # see the billing-alarm note in template.yaml
+capabilities = "CAPABILITY_IAM" # the template creates the execution role
+confirm_changeset = false
+resolve_s3 = true
+s3_prefix = "codebase-welcome-guide"
+# A redeploy with no diff is a success, not a failure. Without this, running
+# deploy.sh twice in a row exits non-zero on the second run.
+fail_on_empty_changeset = false
+
+# Deliberately no template_file in this section. `sam deploy` defaults to
+# .aws-sam/build/template.yaml, which is the built artifact with the packaged
+# code. Pointing it back at infra/template.yaml would make deploy re-package
+# CodeUri: ../ itself -- the entire repository root, .venv included, with no
+# ui/ copied in and no dependencies installed.

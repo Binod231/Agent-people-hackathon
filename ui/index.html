@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+  ============================================================================
+  DOM CONTRACT for ui/app.js  (task 8.2)
+  ----------------------------------------------------------------------------
+  index.html and styles.css ship the entire static shell. app.js only reads
+  and writes the hooks below. It creates no new ids and introduces no class
+  names that are not listed here.
+
+  IDS app.js BINDS TO
+    #composer       <form>      submit handler; native form submit
+    #input          <textarea>  the single input, serving both phases
+    #input-label    <label>     textContent swapped per phase (see below)
+    #input-hint     <p>         static; target of the input's aria-describedby
+    #send           <button>    textContent swapped per phase
+    #transcript     <ol>        role="log" aria-live="polite" -- THE live
+                                region. Every message node is appended here
+                                and nowhere else. Set aria-busy="true" while a
+                                request is in flight and "false" once it lands.
+    #status         <p>         role="status". ONE short line naming the step
+                                currently in flight. Write with textContent,
+                                add class "status--busy" while in flight, and
+                                clear both when the turn ends.
+    #steps          <ol>        the authoritative completed checklist built
+                                from response.steps, with durations.
+                                Deliberately NOT a live region -- see note.
+    #ingested       <details>   the files-I-read disclosure; remove [hidden]
+                                once there is something to disclose
+    #ingested-list  <ul>        one <li> per response.repo.ingested_paths
+    #source-link    <a>         set href and remove [hidden] when the public
+                                source repository URL exists (Req 9 AC2).
+                                It ships with no href so the page never
+                                carries a dead tab stop.
+    #tagline        <p>         static
+
+  PHASE SWITCH (one input, two phases)
+    on load                       #input-label "Public GitHub repository URL"
+                                  #send        "Start the tour"
+    after the Orientation_Message #input-label "Ask about this repository"
+                                  #send        "Send"
+
+  MESSAGE NODE STRUCTURE  (append to #transcript, nowhere else)
+    <li class="msg msg--ROLE">
+      <p class="msg__who">You</p>       <- sender label, always the first child
+      <p>a paragraph of plain text</p>  <- one per blank-line separated block,
+                                           may contain <code> for `spans`
+      <pre>a fenced code block</pre>    <- one per ``` fence
+    </li>
+    ROLE and its msg__who text:
+      user       the person's turn                      "You"
+      assistant  a model turn                           "Guide"
+      error      an error response rendered as a chat
+                 message (Requirement 6 AC1)            "Problem"
+      notice     a client-side note, e.g. history
+                 trimmed to fit the 8 KB body cap       "Note"
+    Every text value is set with textContent. There is no innerHTML
+    assignment anywhere in app.js: model output and repository content are
+    untrusted input.
+    The <noscript> block below reuses msg/msg--notice/msg__who on a
+    <p>/<span> pair rather than an <li>, because it cannot sit inside the
+    transcript. The styles cover both shapes; app.js only ever builds the
+    <li> form.
+
+  STEP CHECKLIST NODE STRUCTURE  (replace the element children of #steps)
+    <li class="step step--STATUS">
+      <span class="step__name">Reading the key files</span>
+      <span class="step__ms">441 ms</span>
+    </li>
+    STATUS mirrors the server's StepRecord.status: ok | error | skipped.
+    The leading glyph is decorative CSS, so for a non-ok step append the
+    state to step__name in words ("Listing files on the default branch -
+    failed"). Status must not be carried by glyph or colour alone.
+
+  WHY #status AND #steps ARE SEPARATE ELEMENTS
+    #status is a live region, so it has to stay one short line: swapping a
+    seven-item list into a live region makes a screen reader announce all
+    seven. #steps is the after-the-fact record, read on demand rather than
+    announced. A <p> also cannot legally contain a list.
+
+  WHY THE LIVE REGIONS ARE IN THIS FILE RATHER THAN BUILT BY app.js
+    Requirement 7 AC6. A live region created in the same tick as its first
+    child is not announced -- assistive technology has to observe the region
+    before content lands in it. So #transcript, #status and #steps all ship
+    empty here.
+  ============================================================================
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Paste a public GitHub repository URL and get a guided tour of where to start reading.">
+<title>Codebase Welcome Guide</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- First focusable element on the page (Requirement 7 AC4). It targets the
+     textarea rather than the form, so activating it puts focus in the box the
+     link actually names. -->
+<a class="skip" href="#input">Skip to the message box</a>
+
+<header class="masthead">
+  <h1>Codebase Welcome Guide</h1>
+  <p id="tagline">Paste a public GitHub repository and I will show you where to start.</p>
+</header>
+
+<main class="chat">
+
+  <noscript>
+    <p class="msg msg--notice">
+      <span class="msg__who">Note</span>
+      This page needs JavaScript to talk to the agent. The conversation is held
+      in the browser, so there is no server-rendered fallback to show you.
+    </p>
+  </noscript>
+
+  <!-- Requirement 7 AC6: the live region exists before any message is
+       inserted, which is what makes announcements work. -->
+  <ol id="transcript" class="transcript"
+      role="log" aria-live="polite" aria-relevant="additions"
+      aria-label="Conversation" aria-busy="false" tabindex="0"></ol>
+
+  <!-- Requirement 5 AC7: the step in flight, announced on its own so it never
+       interleaves with the assistant message being read out. -->
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+
+  <!-- The authoritative step record from the response. Not a live region. -->
+  <ol id="steps" class="steps" aria-label="What I did on the last turn"></ol>
+
+  <footer class="chat-footer">
+    <!-- Requirement 4 AC5: the ingested selection, visible without asking. -->
+    <details id="ingested" class="ingested" hidden>
+      <summary>Files I read</summary>
+      <ul id="ingested-list" class="ingested__list"></ul>
+    </details>
+    <a id="source-link" hidden>Source and infrastructure on GitHub</a>
+  </footer>
+
+</main>
+
+<form id="composer" class="composer" autocomplete="off">
+  <label for="input" id="input-label" class="composer__label">Public GitHub repository URL</label>
+  <div class="composer__row">
+    <textarea id="input" name="input" class="composer__input" rows="1" required
+              aria-describedby="input-hint" enterkeyhint="send" spellcheck="false"
+              placeholder="https://github.com/pallets/flask"></textarea>
+    <button type="submit" id="send" class="composer__send">Start the tour</button>
+  </div>
+  <p id="input-hint" class="hint">Enter to send, Shift and Enter for a new line.</p>
+</form>
+
+<script src="app.js" defer></script>
+</body>
+</html>

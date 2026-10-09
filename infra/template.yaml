@@ -1,0 +1,307 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+# Codebase Welcome Guide -- the whole deployed system, in one stack.
+#
+# One Lambda function behind one Lambda Function URL serves both halves of the
+# product: GET / returns the Chat_UI from the deployment package, POST /api/chat
+# runs the agent. No CloudFront distribution, no S3 bucket, no API Gateway, no
+# usage plan, no API key, and therefore no CORS anywhere -- the UI and the API
+# are the same origin by construction. The reasoning is in design.md ->
+# Lean Deployment Revision, and what it costs is docs/out-of-scope.md entry 9.
+#
+# Deploy with scripts/deploy.sh, which checks the preflight gate first
+# (Requirement 1 AC7) and reads the region and model id out of .preflight-ok.
+#
+# ---------------------------------------------------------------------------
+# us-east-1 ONLY, and not by accident
+# ---------------------------------------------------------------------------
+# The billing alarm lives in this template rather than in a stack of its own.
+# That works only because the Target_Region the preflight confirmed is
+# us-east-1: AWS/Billing publishes EstimatedCharges in us-east-1 and nowhere
+# else, so an alarm on that metric in any other region sits in
+# INSUFFICIENT_DATA forever. If the region ever moves, the SNS topic, the
+# subscription, and the billing alarm have to split back out into a us-east-1
+# stack of their own. InvocationAlarm stays put: AWS/Lambda Invocations
+# publishes in whatever region the function runs in, so it belongs with the
+# function and would need a topic in that region instead. scripts/deploy.sh enforces the region rather than leaving it to be
+# discovered later.
+#
+# ---------------------------------------------------------------------------
+# What the deployment package looks like (the handler has to match this)
+# ---------------------------------------------------------------------------
+# `Metadata: BuildMethod: makefile` hands the packaging to `build-AgentFunction`
+# in the Makefile at the repository root, because the function needs the Python
+# from `src/agent/` and the Chat_UI from `ui/`, and those are two trees. The
+# target produces:
+#
+#   <package root>/
+#   |- agent/                   <- Handler: agent.handler.handler
+#   |  |- handler.py
+#   |  |- bedrock.py, config.py, ... every *.py from src/agent/
+#   |  `- ui/                   <- Path(__file__).resolve().parent / "ui"
+#   |     |- index.html             text/html; charset=utf-8
+#   |     |- styles.css             text/css; charset=utf-8
+#   |     `- app.js                 text/javascript; charset=utf-8
+#   `- boto3/, botocore/, ...   <- pinned from src/requirements.txt
+#
+# So `handler.py` reads its assets from `Path(__file__).resolve().parent / "ui"`
+# -- relative to its own module file, never to a working directory. In a source
+# checkout that directory does not exist and `ui/` at the repository root does,
+# which is why `scripts/local_server.py` needs a second candidate. The Makefile
+# header spells out both paths.
+
+Description: >
+  Codebase Welcome Guide agent: one Lambda function behind a public Lambda
+  Function URL, serving the Chat_UI and the chat API, with a 7-day log group,
+  a 10 USD billing alarm, an invocation-rate alarm, and an SNS email
+  subscription. us-east-1 only.
+
+Parameters:
+  ModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    # The id task 1.4 confirmed against this account. It is the direct
+    # foundation-model id, not the `us.` cross-region inference profile, and
+    # the IAM policy below builds a foundation-model ARN out of it -- an
+    # inference-profile id has a different ARN shape and would not authorize.
+    # scripts/deploy.sh reads this out of .preflight-ok and rejects the `us.`
+    # form rather than letting it fail at the first inference.
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*\\.[a-z0-9.:-]+$"
+    ConstraintDescription: >
+      A Bedrock foundation-model id, for example amazon.nova-lite-v1:0.
+    Description: >
+      Bedrock model id the function invokes. Also pins the IAM policy, so it
+      must be the id the preflight confirmed.
+
+  TargetRegion:
+    Type: String
+    Default: us-east-1
+    AllowedPattern: "^[a-z]{2}(-[a-z]+)+-[0-9]$"
+    ConstraintDescription: An AWS Region, for example us-east-1.
+    Description: >
+      Region the function builds its Bedrock client for. Passed explicitly so a
+      cold start cannot inherit a region from the execution environment. This
+      stack is us-east-1 only (see the header note on the billing alarm).
+
+  AlarmEmail:
+    Type: String
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    ConstraintDescription: An email address, for example you@example.com.
+    Description: >
+      Builder-confirmed address for billing alarm notifications (Requirement 8
+      AC3). AWS sends a confirmation email on first deploy; until the link in
+      it is clicked the subscription delivers nothing, which is why
+      scripts/deploy.sh polls for it and task 9.2 is a Builder step.
+
+Resources:
+  # Created here, with its retention, rather than left to Lambda. Lambda
+  # auto-creates /aws/lambda/<function-name> on first invocation with retention
+  # "Never expire" -- Requirement 12 AC3 wants 7 days. The name below matches
+  # the convention exactly and LoggingConfig points the function at it, so the
+  # function uses this group instead of making its own. The execution role has
+  # no logs:CreateLogGroup, so it could not make one anyway.
+  AgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-agent"
+      RetentionInDays: 7 # Requirement 12 AC3 (config.LOG_RETENTION_DAYS)
+
+  AgentFunction:
+    Type: AWS::Serverless::Function
+    # No DependsOn needed: the Ref to AgentLogGroup in LoggingConfig below
+    # already orders the group before the function, which is what matters --
+    # the group has to exist before the first invocation, or the retention is
+    # never applied to the logs that land.
+    Metadata:
+      BuildMethod: makefile # see the header: Makefile -> build-AgentFunction
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-agent"
+      Description: Codebase Welcome Guide -- Chat_UI assets and POST /api/chat.
+      CodeUri: ../ # the Makefile's working directory, not a Python source root
+      Handler: agent.handler.handler
+      Runtime: python3.12
+      MemorySize: 1024 # design: cold-start budget for Requirement 5 AC6
+      Timeout: 60 # Requirement 8 AC4 (config.LAMBDA_TIMEOUT_SECONDS)
+      # `ReservedConcurrentExecutions: 2` belonged here, for Requirement 8 AC5.
+      # It is not deployable on this account, and the first attempt to deploy it
+      # failed the stack create:
+      #
+      #   Specified ReservedConcurrentExecutions for function decreases
+      #   account's UnreservedConcurrentExecution below its minimum value
+      #   of [10].
+      #
+      # AWS holds 10 concurrent executions back as unreserved, and this
+      # account's entire ConcurrentExecutions limit is 10 -- the new-account
+      # value, where the default is 1000. So reserving any amount at all, even
+      # 1, pushes unreserved below the floor. There is no smaller number that
+      # works; the property is unavailable here, not mis-sized.
+      #
+      # What bounds concurrency now is the account's own 10-execution ceiling.
+      # Two things about that are weaker than the line it replaces, and worth
+      # being exact about rather than rounding off:
+      #
+      #   - It is account-wide, not a per-function guarantee. Any other
+      #     function deployed into this account draws from the same 10, so this
+      #     function's share is 10 only while it is the only thing running.
+      #   - It is 10 and not 2, so the request rate it permits is five times
+      #     what the reservation would have allowed. The cost arithmetic that
+      #     follows is docs/out-of-scope.md entry 9, and InvocationAlarm below
+      #     is the control added in response.
+      #
+      # A support request raising the account's ConcurrentExecutions limit makes
+      # the reservation possible again. Put the line back if that ever lands --
+      # it is one line, and the reasoning for the value of 2 is unchanged.
+      LoggingConfig:
+        LogGroup: !Ref AgentLogGroup
+      Environment:
+        Variables:
+          # bedrock.py reads both, per call rather than at import.
+          MODEL_ID: !Ref ModelId
+          TARGET_REGION: !Ref TargetRegion
+      # Requirement 7 AC1. The only entry point: public HTTPS, no
+      # authentication, which Requirement 12 AC2 (anonymous sessions) requires.
+      # No Cors block on purpose -- one function serves the page and the API, so
+      # every request is same-origin and a preflight never happens. Adding CORS
+      # here would widen the endpoint, not protect it.
+      FunctionUrlConfig:
+        AuthType: NONE
+      # Requirement 8 AC6. Two statements, no wildcard action, no wildcard
+      # resource, and no logs:CreateLogGroup -- permission to create a group
+      # would only let the function create one without retention.
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            # Converse authorizes against bedrock:InvokeModel. One resource,
+            # because the preflight answered on the direct foundation-model id.
+            # Foundation-model ARNs carry no account id.
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource:
+                - !Sub "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/${ModelId}"
+            # GetAtt on a log group returns an ARN that already ends in ":*",
+            # which covers every log stream in that one group and nothing else.
+            - Effect: Allow
+              Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource:
+                - !GetAtt AgentLogGroup.Arn
+
+  # Cost_Guard, Requirement 8 AC2 and AC3. In this stack only because the
+  # region is us-east-1 -- see the header note.
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-billing-alarm"
+      DisplayName: Codebase Guide billing
+
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  BillingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-estimated-charges"
+      AlarmDescription: >
+        Estimated monthly charges have passed 10 USD (Requirement 8 AC2). This
+        is still the only thing that reports the total, but it is no longer the
+        early warning: EstimatedCharges publishes every six hours or so, and at
+        the account's 10-execution ceiling the threshold is reachable inside
+        that window. InvocationAlarm is what fires first.
+      Namespace: AWS/Billing
+      MetricName: EstimatedCharges
+      Dimensions:
+        - Name: Currency
+          Value: USD
+      Statistic: Maximum
+      # EstimatedCharges publishes roughly every six hours, so a shorter period
+      # would evaluate against no data most of the time. 21600 s is one window.
+      Period: 21600
+      EvaluationPeriods: 1
+      Threshold: 10 # Requirement 8 AC2 (config.BILLING_ALARM_USD)
+      ComparisonOperator: GreaterThanThreshold
+      # The metric only publishes once billing alerts are enabled in the
+      # account's Billing preferences (task 1.5, no API for it). Until the first
+      # window lands there is no data, and missing data here means "nothing has
+      # been billed yet", not "something is wrong".
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  # The compensating control for the concurrency reservation that would not
+  # deploy -- see the long note on AgentFunction above. This is the alarm that
+  # now does the early-warning job.
+  #
+  # BillingAlarm cannot do it. AWS/Billing EstimatedCharges publishes roughly
+  # every six hours, so that alarm can trail the spend it reports by most of a
+  # day. That lag was tolerable against a concurrency of 2, which takes five or
+  # six hours to reach 10 USD. Against the account ceiling of 10 the same spend
+  # arrives in a little over an hour -- before the first billing window has
+  # necessarily published anything. AWS/Lambda Invocations publishes on a
+  # 60-second period, so this alarm reports abuse in minutes instead.
+  #
+  # It notifies; it does not throttle. Nothing in this stack throttles any more.
+  InvocationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-invocation-rate"
+      AlarmDescription: >
+        More than 175 invocations in one 5-minute window, about 35 a minute,
+        which is traffic no person reading a repository produces. The threshold
+        is set between two measured points. Real use: a human working through
+        the demo sends a few requests a minute, so a busy window is around 25
+        invocations, and 175 is roughly seven times that -- a judge and a reader
+        using the agent at the same time cannot trip it. Saturation: 10
+        concurrent executions at roughly 7-second turns is about 85 invocations
+        a minute, or 430 in a window, so 175 is well under the ceiling and
+        sustained abuse crosses it inside a single period. This alarm exists
+        because the reserved concurrency of 2 that Requirement 8 AC5 names
+        cannot be deployed on this account, and because the EstimatedCharges
+        alarm can lag real spend by most of a day.
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AgentFunction
+      Statistic: Sum
+      Period: 300 # config.INVOCATION_ALARM_PERIOD_SECONDS
+      EvaluationPeriods: 1
+      Threshold: 175 # config.INVOCATION_ALARM_THRESHOLD
+      ComparisonOperator: GreaterThanThreshold
+      # An idle demo publishes no Invocations datapoints at all. No traffic is
+      # the normal state here, not a fault, and it must not page anyone.
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlarmTopic
+
+Outputs:
+  FunctionUrl:
+    Description: >
+      The public deployed URL (Requirement 7 AC1, Requirement 9 AC1). This is
+      the link the submission is judged on.
+    Value: !GetAtt AgentFunctionUrl.FunctionUrl
+
+  AlarmTopicArn:
+    Description: >
+      Billing alarm topic. Task 9.2 confirms the email subscription on it and
+      proves delivery with one manual sns publish.
+    Value: !Ref AlarmTopic
+
+  LogGroupName:
+    Description: Agent log group, 7-day retention (Requirement 12 AC3).
+    Value: !Ref AgentLogGroup
+
+  InvocationAlarmName:
+    Description: >
+      The invocation-rate alarm standing in for the reserved concurrency this
+      account refuses. Output so its state can be checked without rebuilding
+      the name from the stack-name convention:
+      aws cloudwatch describe-alarms --alarm-names <this>.
+    Value: !Ref InvocationAlarm

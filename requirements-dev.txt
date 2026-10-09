@@ -1,0 +1,9 @@
+# Development and test dependencies. Not deployed -- `sam build` installs from
+# src/requirements.txt only.
+-r src/requirements.txt
+
+pytest==9.1.1
+hypothesis==6.168.5
+
+# Typing only, for editor and mypy use against the Bedrock and STS clients.
+boto3-stubs[bedrock-runtime,cloudformation,sts]==1.43.110

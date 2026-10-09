@@ -1,0 +1,5 @@
+{
+  "target_region": "us-east-1",
+  "model_id": "amazon.nova-lite-v1:0",
+  "alarm_email": "you@example.com"
+}

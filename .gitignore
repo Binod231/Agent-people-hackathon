@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Preflight gate marker -- machine-local, written by preflight/preflight.py and
+# checked by scripts/deploy.sh (Requirement 1 AC7).
+.preflight-ok
+
+# SAM build output
+.aws-sam/
+packaged.yaml
+
+# Builder-supplied configuration: holds the target region and the billing alarm
+# email address. config.example.json is the committed template.
+config.json
+
+# Hypothesis keeps failing examples so a regression re-runs the exact input that
+# found it (see the design's Property Test Configuration section). That database
+# is committed on purpose; the rest of its scratch state is not.
+.hypothesis/*
+!.hypothesis/examples/
+
+# Editor and OS noise
+.DS_Store
+*.swp

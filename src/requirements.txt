@@ -1,0 +1,7 @@
+# Lambda runtime dependencies. Pinned exactly: the deployed package must be
+# reproducible, and the python3.12 runtime's own boto3 is a moving target.
+#
+# boto3 is the only runtime dependency (see the design's "No Agent Framework"
+# decision). urllib3 arrives with it, which is why github_client.py uses urllib3
+# rather than adding a second HTTP library to the package.
+boto3==1.43.110
