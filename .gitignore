@@ -18,6 +18,13 @@ packaged.yaml
 # email address. config.example.json is the committed template.
 config.json
 
+# Submission artifacts, not repository content. The out-of-scope log stays
+# tracked -- it is the engineering record and the README links to it. The
+# Builder Center article lives on builder.aws.com, and docs/proof/ is capture
+# material for that submission; neither belongs in the public repo.
+docs/article.md
+docs/proof/
+
 # Hypothesis keeps failing examples so a regression re-runs the exact input that
 # found it (see the design's Property Test Configuration section). That database
 # is committed on purpose; the rest of its scratch state is not.

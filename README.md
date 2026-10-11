@@ -45,7 +45,7 @@ Makefile                 the SAM makefile build; packages src/agent/ plus ui/
 scripts/deploy.sh        the only supported way to create the real resources
 scripts/local_server.py  stdlib http.server routing through the same handler
 tests/                   pytest plus hypothesis; the whole suite runs offline
-docs/                    proof bundle, article, out-of-scope log
+docs/out-of-scope.md     the log of what was cut and why (Requirement 12 AC6)
 ```
 
 Every limit lives in [`src/agent/config.py`](src/agent/config.py) as a named
