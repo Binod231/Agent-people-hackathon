@@ -290,9 +290,26 @@ enough for anything else. It is five times less bounded than this entry claimed
 before the deploy, and the alarm that now covers the gap is a notification
 rather than a limit.
 
+One more thing got worse after the deploy, and it was a deliberate choice rather
+than a surprise. The source repository is now public, and it carries the
+deployed Function URL in its README — so the endpoint is no longer a link shared
+with judges, it is a link anyone reading the repository can find and replay. The
+submission requires both to be public (Requirement 9 AC1 and AC2), so this is
+the cost of the requirement rather than an oversight, but it moves this entry
+from "an unauthenticated endpoint a few people know about" to "an
+unauthenticated endpoint with no rate limit, published". The exposure priced
+above is the same arithmetic; the population that can reach it is not. The
+intended end state is therefore to take the stack down once judging is over —
+`aws cloudformation delete-stack --stack-name codebase-welcome-guide --region
+us-east-1` — not to leave it running indefinitely because nothing has gone wrong
+yet. A published URL on an unbounded meter is a bill waiting for someone bored
+enough to write a loop.
+
 **What would change the call:** any deployment that is not this demo — a link
 that stays up after judging, a link posted somewhere public, or any sign in the
-logs of traffic that is not a person reading a repository. A raised account
+logs of traffic that is not a person reading a repository. The second of those
+has now happened by design, which is why the delete-stack step above is part of
+the plan rather than a contingency. A raised account
 `ConcurrentExecutions` limit would also change it, in the narrow sense that it
 makes `ReservedConcurrentExecutions: 2` deployable again: one line back in
 `infra/template.yaml`, and the rate ceiling returns to 17 calls a minute. That

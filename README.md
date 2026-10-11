@@ -6,7 +6,7 @@ Challenge" submission.
 
 - Spec: [`.kiro/specs/delightful-aws-agent/`](.kiro/specs/delightful-aws-agent/)
 - Out-of-scope log (Requirement 12 AC6): [`docs/out-of-scope.md`](docs/out-of-scope.md)
-- Public deployed URL: **`<PLACEHOLDER — filled in after task 9.1 deploys the stack>`**
+- Public deployed URL: **<https://ciy6fwtatvaifvve5xadk6fnvy0xelpz.lambda-url.us-east-1.on.aws/>**
 
 ## Architecture
 
@@ -50,9 +50,6 @@ docs/                    proof bundle, article, out-of-scope log
 
 Every limit lives in [`src/agent/config.py`](src/agent/config.py) as a named
 constant citing the acceptance criterion it implements.
-
-Not written yet at this commit: `src/agent/handler.py`, `ui/app.js`, and
-`scripts/local_server.py` (tasks 5.2 and 8.2).
 
 ## Configure
 

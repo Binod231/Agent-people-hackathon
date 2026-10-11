@@ -611,8 +611,23 @@ test("markup in model output is rendered as text, not nodes", async () => {
   assert.equal(harness.dom.byId("ingested").hidden, false);
   assert.equal(harness.dom.byId("ingested-list").childNodes.length, 3);
 
-  // Requirement 9 AC2: no href, so no dead tab stop.
-  assert.equal(harness.dom.byId("source-link").hidden, true);
+  // Requirement 9 AC2: the footer source link.
+  //
+  // This assertion was inverted at publication. It used to read `hidden ===
+  // true`, which was correct while `SOURCE_URL` in app.js was the empty
+  // string: index.html ships #source-link with no href and the [hidden]
+  // attribute set, and app.js only reveals it when there is somewhere for it
+  // to go, so the page never carried a tab stop that led nowhere. The
+  // repository is now public, `SOURCE_URL` holds its URL, and the branch that
+  // reveals the link runs -- so hidden is false and the href is set. The
+  // guarantee under test did not change, only which side of its condition we
+  // are on: the link is shown exactly when it has a destination.
+  const sourceLink = harness.dom.byId("source-link");
+  assert.equal(sourceLink.hidden, false);
+  assert.equal(
+    sourceLink.getAttribute("href"),
+    "https://github.com/Binod231/Agent-people-hackathon",
+  );
 });
 
 // ---------------------------------------------------------------------------

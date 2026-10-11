@@ -40,8 +40,8 @@ const STORAGE_KEY = "welcome-guide.v1";
 
 /* Requirement 9 AC2. Set to the public source repository URL at publication.
    Empty means the footer link stays hidden, so the page never carries a tab
-   stop that goes nowhere. */
-const SOURCE_URL = "";
+   stop that goes nowhere. Set at publication: the repository is public. */
+const SOURCE_URL = "https://github.com/Binod231/Agent-people-hackathon";
 
 /* The step vocabulary, which must match agent/steps.py StepName member for
    member. Order is execution order. `hintMs` drives the in-flight prediction

@@ -2,20 +2,21 @@
 
 #agents
 
-> **DRAFT — not publishable yet.** Four things are placeholders, marked
-> `<PLACEHOLDER>` in the text below, and all four come from artifacts that do not
-> exist at the time of writing:
+> **DRAFT — not publishable yet.** The two URLs are now real. What remains
+> `<PLACEHOLDER>` in the text below is the Proof_Bundle: captured artifacts that
+> genuinely do not exist yet.
 >
-> | Placeholder | Filled in by |
-> | --- | --- |
-> | Deployed URL | task 9.1 — the stack has not been deployed |
-> | Source repository URL | task 9.1 — the repository is not published |
-> | Orientation screenshot, failure screenshot, clip, three transcripts | task 11.1 — the Proof_Bundle has not been captured |
-> | Proof repository names and their languages | task 11.1 |
+> | Placeholder | Owner | Status |
+> | --- | --- | --- |
+> | Deployed URL | task 9.1 | **filled in** — stack deployed to us-east-1 |
+> | Source repository URL | task 9.1 | **filled in** — repository is public |
+> | Orientation screenshot, failure screenshot, clip, three transcripts | task 11.1 | outstanding — the Proof_Bundle has not been captured |
+> | Proof repository names and their languages | task 11.1 | outstanding — carried by the transcript filenames |
 >
-> The deployed URL and the source URL both come from `docs/proof/manifest.json`
-> once task 11.1 writes it. Nothing in the Proof section should be published
-> while it still reads `<PLACEHOLDER>`.
+> Only the two artifact rows are left, and both belong to task 11.1. Task 11.1
+> also writes `docs/proof/manifest.json`, which must list the same two URLs this
+> article now carries. Nothing in the Proof section should be published while it
+> still reads `<PLACEHOLDER>`.
 
 ## What it does
 
@@ -139,8 +140,8 @@ Writing that down was more useful than pretending the quota was still there.
 
 ## The proof
 
-- **Live agent:** `<PLACEHOLDER — deployed Function URL>`
-- **Source and infrastructure-as-code:** `<PLACEHOLDER — public repository URL>`
+- **Live agent:** <https://ciy6fwtatvaifvve5xadk6fnvy0xelpz.lambda-url.us-east-1.on.aws/>
+- **Source and infrastructure-as-code:** <https://github.com/Binod231/Agent-people-hackathon>
 
 Two pieces of the Proof_Bundle are the evidence that the two design decisions
 above actually changed the experience rather than just the code.
